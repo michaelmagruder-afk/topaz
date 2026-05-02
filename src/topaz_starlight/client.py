@@ -10,6 +10,7 @@ Workflow implemented (per https://developer.topazlabs.com):
 
 from __future__ import annotations
 
+import math
 import os
 import time
 from dataclasses import asdict, dataclass, field
@@ -39,6 +40,16 @@ class TopazAPIError(RuntimeError):
 Creativity = Literal["low", "middle", "high"]
 
 
+_FILTER_FIELD_MAP = {
+    "input_frame_count": "inputFrameCount",
+    "is_optimized_mode": "isOptimizedMode",
+    "enable_clc": "enableClc",
+    "video_profile": "videoProfile",
+    "video_bit_depth": "videoBitDepth",
+    "video_codec": "videoCodec",
+}
+
+
 @dataclass
 class StarlightPreciseFilter:
     """Filter config for the Starlight Precise 2.5 (slp-2.5) model.
@@ -59,7 +70,8 @@ class StarlightPreciseFilter:
     fps: Optional[float] = None
 
     def to_payload(self) -> dict[str, Any]:
-        return {k: v for k, v in asdict(self).items() if v is not None}
+        raw = {k: v for k, v in asdict(self).items() if v is not None}
+        return {_FILTER_FIELD_MAP.get(k, k): v for k, v in raw.items()}
 
 
 @dataclass
@@ -237,9 +249,9 @@ class TopazClient:
             f"/video/{request_id}/accept",
             headers=self._headers(),
         )
-        urls = data.get("uploadUrls") or data.get("upload_urls")
+        urls = data.get("urls") or data.get("uploadUrls") or data.get("upload_urls")
         if not urls:
-            raise TopazAPIError(f"Accept response missing uploadUrls: {data}", body=data)
+            raise TopazAPIError(f"Accept response missing urls: {data}", body=data)
         return list(urls)
 
     def upload_parts(
@@ -249,10 +261,20 @@ class TopazClient:
         part_size: int = DEFAULT_PART_SIZE,
         content_type: str = "video/mp4",
     ) -> list[dict[str, Any]]:
+        # The server returns N signed URLs and the file must be split into
+        # exactly N equal byte-ranges. `part_size` is kept for API
+        # compatibility but is ignored — chunk size is derived from
+        # file_size / len(upload_urls).
+        file_size = Path(file_path).stat().st_size
+        n_parts = len(upload_urls)
+        if n_parts == 0:
+            raise TopazAPIError("accept_request returned zero upload URLs")
+        chunk_size = math.ceil(file_size / n_parts)
+
         results: list[dict[str, Any]] = []
         with open(file_path, "rb") as f:
             for idx, url in enumerate(upload_urls, start=1):
-                chunk = f.read(part_size)
+                chunk = f.read(chunk_size)
                 if not chunk:
                     break
                 resp = self._session.put(
