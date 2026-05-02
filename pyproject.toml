@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "topaz-starlight"
+version = "0.1.0"
+description = "Client for the Topaz Labs Video API targeting the Starlight Precise 2.5 (slp-2.5) model."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = [
+    "requests>=2.31",
+]
+
+[project.scripts]
+topaz-starlight = "topaz_starlight.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
