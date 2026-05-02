@@ -298,7 +298,7 @@ class TopazClient:
     def complete_upload(self, request_id: str, upload_results: list[dict[str, Any]]) -> dict[str, Any]:
         return self._request(
             "PATCH",
-            f"/video/{request_id}/complete-upload",
+            f"/video/{request_id}/complete-upload/",
             headers=self._headers(json_body=True),
             json={"uploadResults": upload_results},
         )
